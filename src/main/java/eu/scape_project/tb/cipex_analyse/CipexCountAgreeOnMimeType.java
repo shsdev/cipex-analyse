@@ -39,87 +39,44 @@ import org.apache.hadoop.util.GenericOptionsParser;
 /**
  * CipexToolsAgreeOnMimeType
  */
-public class CipexToolsAgreeOnMimeType {
+public class CipexCountAgreeOnMimeType {
 
     private static CliConfig config;
-    private static final String VALUESEPARATOR = "~";
 
     /**
      * Reducer class.
      */
-    public static class CipexToolsAgreeOnMimeTypeReducer
-            extends Reducer<Text, Text, Text, LongWritable> {
+    public static class CipexCountAgreeOnMimeTypeReducer
+            extends Reducer<Text, LongWritable, Text, LongWritable> {
 
         @Override
-        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            LongWritable one = new LongWritable(1L);
-            String droidMime = null;
-            String unixfileMime = null;
-            String tikaMime = null;
-            for (Text val : values) {
-                String valStr = val.toString();
-                if (valStr.startsWith("droid~")) {
-                    droidMime = valStr.substring(6); // only mime type result
-                } else if (valStr.startsWith("unixfile~")) {
-                    unixfileMime = valStr.substring(9); // only mime type result
-                } else if (valStr.startsWith("tika~")) {
-                    tikaMime = valStr.substring(5); // only mime type result
-                }
+        public void reduce(Text key, Iterable<LongWritable> values, Context context) throws IOException, InterruptedException {
+            long sum = 0;
+            for (LongWritable val : values) {
+                sum += val.get();
             }
-            if (droidMime != null && unixfileMime != null) {
-                if (droidMime.equals(unixfileMime)) {
-                    context.write(new Text("droid-unixfile"), one);
-                }
-            }
-            if (droidMime != null && tikaMime != null) {
-                if (droidMime.equals(tikaMime)) {
-                    context.write(new Text("droid-tika"), one);
-                }
-            }
-
-            if (unixfileMime != null && tikaMime != null) {
-                if (unixfileMime.equals(tikaMime)) {
-                    context.write(new Text("unixfile-tika"), one);
-                }
-            }
+            context.write(key, new LongWritable(sum));
         }
     }
 
     /**
      * Mapper class.
      */
-    public static class CipexToolsAgreeOnMimeTypeMapper
-            extends Mapper<LongWritable, Text, Text, Text> {
-
+    public static class CipexCountAgreeOnMimeTypeMapper
+            extends Mapper<LongWritable, Text, Text, LongWritable> {
         @Override
         public void map(LongWritable key, Text value, Mapper.Context context) throws IOException, InterruptedException, FileNotFoundException {
-            // /010.zip5149771439614046179/010/010000.txt	tika	mime	text/plain
-            // /010.zip5149771439614046179/010/010000.txt	unixfile	mime	text/plain
-            // /010.zip5149771439614046179/010/010000.txt	droid	puid	fmt/0
-            // /010.zip5149771439614046179/010/010000.txt	droid	mime
-            String line = value.toString();
-            String[] cols = line.split("\t");
-            // Each line has 4 columns
-            if (cols.length == 4) {
-                String pathkey = (String) cols[0];
-                String tool = (String) cols[1];
-                String type = (String) cols[2];
-                String idres = (String) cols[3];
-                Text outKey = new Text(pathkey);
-                // consider only mime type identification results
-                if (type.equals("mime")) {
-                    Text outVal = new Text(tool + VALUESEPARATOR + idres);
-                    // Key: 010.zip5149771439614046179/010/010000.txt , Value: droid~text/plain
-                    // Key: 010.zip5149771439614046179/010/010000.txt , Value: unixfile~text/plain
-                    // Key: 010.zip5149771439614046179/010/010000.txt , Value: tika~application/octet-stream
-                    context.write(outKey, outVal);
-                }
-
-            }
+            // unixfile-tika   1
+            // droid-unixfile  1
+            // droid-tika  1
+            String[] keyVal = value.toString().split("\t");
+            Text outKey = new Text(keyVal[0]);
+            LongWritable outVal = new LongWritable(1L);
+            context.write(outKey, outVal);
         }
     }
 
-    public CipexToolsAgreeOnMimeType() {
+    public CipexCountAgreeOnMimeType() {
     }
 
     public static CliConfig getConfig() {
@@ -144,10 +101,7 @@ public class CipexToolsAgreeOnMimeType {
         } else {
             Options.initOptions(cmd, config);
         }
-
-
         startHadoopJob(conf);
-
     }
 
     public static void startHadoopJob(Configuration conf) {
@@ -158,16 +112,16 @@ public class CipexToolsAgreeOnMimeType {
             // job.getConfiguration().set("mapred.job.tracker", "local");
             // job.getConfiguration().set("fs.default.name", "file:///");
 
-            job.setJarByClass(CipexToolsAgreeOnMimeType.class);
+            job.setJarByClass(CipexCountAgreeOnMimeType.class);
 
-            job.setMapperClass(CipexToolsAgreeOnMimeType.CipexToolsAgreeOnMimeTypeMapper.class);
-            job.setReducerClass(CipexToolsAgreeOnMimeType.CipexToolsAgreeOnMimeTypeReducer.class);
+            job.setMapperClass(CipexCountAgreeOnMimeType.CipexCountAgreeOnMimeTypeMapper.class);
+            job.setReducerClass(CipexCountAgreeOnMimeType.CipexCountAgreeOnMimeTypeReducer.class);
 
             job.setInputFormatClass(TextInputFormat.class);
             job.setOutputFormatClass(TextOutputFormat.class);
 
             job.setMapOutputKeyClass(Text.class);
-            job.setMapOutputValueClass(Text.class);
+            job.setMapOutputValueClass(LongWritable.class);
 
             job.setOutputKeyClass(Text.class);
             job.setOutputValueClass(LongWritable.class);
